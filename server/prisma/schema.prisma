@@ -1,0 +1,212 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STUDENT
+  FACULTY
+  STAFF
+  ADMIN
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  ESCALATED
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         Role          @default(STUDENT)
+  departmentId String?
+  department   Department?   @relation(fields: [departmentId], references: [id])
+  isAvailable  Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  requestedTickets Ticket[]        @relation("RequesterTickets")
+  assignedTickets  Ticket[]        @relation("AssigneeTickets")
+  comments         Comment[]
+  historyEntries   TicketHistory[]
+  notifications    Notification[]
+}
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  users   User[]
+  tickets Ticket[]
+}
+
+model Ticket {
+  id           String         @id @default(uuid())
+  ticketNumber String         @unique
+  title        String
+  description  String
+  category     String
+  priority     TicketPriority @default(MEDIUM)
+  urgency      String         @default("MEDIUM")
+  location     String
+  impact       String?
+  status       TicketStatus   @default(OPEN)
+  requesterId  String
+  requester    User           @relation("RequesterTickets", fields: [requesterId], references: [id])
+  departmentId String?
+  department   Department?    @relation(fields: [departmentId], references: [id])
+  assigneeId   String?
+  assignee     User?          @relation("AssigneeTickets", fields: [assigneeId], references: [id])
+  incidentId   String?
+  incident     Incident?      @relation(fields: [incidentId], references: [id])
+  aiGenerated  Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  dueAt        DateTime?
+  resolvedAt   DateTime?
+  closedAt     DateTime?
+  updatedAt    DateTime       @updatedAt
+
+  aiAnalysis     AIAnalysis?
+  comments       Comment[]
+  history        TicketHistory[]
+  notifications  Notification[]
+  automationLogs AutomationLog[]
+  attachments    Attachment[]
+}
+
+model Incident {
+  id             String         @id @default(uuid())
+  incidentNumber String         @unique
+  title          String
+  description    String
+  category       String
+  location       String
+  priority       TicketPriority @default(HIGH)
+  status         TicketStatus   @default(OPEN)
+  masterTicketId String?
+  affectedUsers  Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  tickets Ticket[]
+}
+
+model AIAnalysis {
+  id                String   @id @default(uuid())
+  ticketId          String   @unique
+  ticket            Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  category          String
+  priority          String
+  urgency           String
+  impact            String?
+  department        String?
+  suggestedAssignee String?
+  suggestedAction   String?
+  reason            String?
+  confidence        Float    @default(0.95)
+  createdAt         DateTime @default(now())
+}
+
+model TicketHistory {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  oldValue  String?
+  newValue  String?
+  createdAt DateTime @default(now())
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticketId  String?
+  ticket    Ticket?  @relation(fields: [ticketId], references: [id])
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model SLARule {
+  id        String         @id @default(uuid())
+  priority  TicketPriority @unique
+  hours     Int
+  enabled   Boolean        @default(true)
+}
+
+model WorkflowRule {
+  id        String   @id @default(uuid())
+  name      String
+  trigger   String
+  condition String
+  action    String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  automationLogs AutomationLog[]
+}
+
+model AutomationLog {
+  id             String        @id @default(uuid())
+  ticketId       String?
+  ticket         Ticket?       @relation(fields: [ticketId], references: [id])
+  workflowRuleId String?
+  workflowRule   WorkflowRule? @relation(fields: [workflowRuleId], references: [id])
+  action         String
+  status         String        @default("SUCCESS")
+  message        String
+  executedAt     DateTime      @default(now())
+}
+
+model Attachment {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fileName  String
+  fileUrl   String
+  fileType  String?
+  fileSize  Int?
+  createdAt DateTime @default(now())
+}
+
+model AIInsight {
+  id              String   @id @default(uuid())
+  type            String
+  title           String
+  description     String
+  severity        String   @default("INFO")
+  relatedLocation String?
+  createdAt       DateTime @default(now())
+}
